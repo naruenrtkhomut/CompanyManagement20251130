@@ -16,11 +16,7 @@ namespace api
             WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
             configuration = new Models.Configuration(builder);
 
-            /** database connections */
-            await configuration.AddDatabaseConnections(builder);
-
             // Add services to the container.
-
             builder.Services.AddControllers();
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
