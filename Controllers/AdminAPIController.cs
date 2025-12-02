@@ -1,9 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
+using System.Data;
+using System.Security.Claims;
 
 namespace api.Controllers
 {
@@ -12,10 +15,13 @@ namespace api.Controllers
     [ApiController]
     public class AdminAPIController : ControllerBase
     {
+        private readonly Models.Database.PSQL.MainDbContext psqlDb;
         private readonly ILogger<AdminAPIController> logger;
-        public AdminAPIController(ILogger<AdminAPIController> inLogger)
+        private readonly Models.Configuration.Main? WebService = Program.Service;
+        public AdminAPIController(Models.Database.PSQL.MainDbContext inPSQLDb, ILogger<AdminAPIController> inLogger)
         {
-            logger = inLogger;
+            this.psqlDb = inPSQLDb;
+            this.logger = inLogger;
         }
 
         /** admin login */
@@ -23,41 +29,49 @@ namespace api.Controllers
         [Route("login")]
         public async Task<IActionResult> GetLogin([FromBody] Models.Data.UserLogin? inUserLogin)
         {
-            if (Program.configuration == null) return Ok(new { result = 0, message = "Web application invalid configuration" });
-            if (inUserLogin == null) return Ok(new { result = 0, message = "Username and Password is null" });
-            inUserLogin.Username = (inUserLogin.Username ?? "").Trim();
-            inUserLogin.Password = (inUserLogin.Password ?? "").Trim();
-            if (string.IsNullOrEmpty(inUserLogin.Username)) return Ok(new { result = 0, message = "Username is null or empty" });
-            if (string.IsNullOrEmpty(inUserLogin.Password)) return Ok(new { result = 0, message = "Password is null or empty" });
-            inUserLogin.Password = Program.configuration.GeneratePassword(inUserLogin.Password);
-            if (string.IsNullOrEmpty(inUserLogin.Password)) return Ok(new { result = 0, message = "Password invalid in format" });
-            int inMode = new Models.Modeling.Database.PSQL.MAIN.PRC.INIT.GETTING().ADMIN_LOGIN;
-            JObject getData = await new Models.Database.POSTGRESQL().Prc_Admin(logger, inMode, new JObject()
-            {
-                { "username", Program.configuration.GetEncryption(inUserLogin.Username) },
-                { "password", Program.configuration.GetEncryption(inUserLogin.Password) }
-            });
-            int getResult = int.TryParse((getData["result"] ?? "").ToObject<string>() ?? "", out getResult) ? getResult : 0;
-            string getMessage = (getData["message"] ?? "").ToObject<string>() ?? "";
-            if (getResult != 1) return Ok(new { result = getResult, message = "Admin login failed" });
-            string getJWTToken = Program.configuration.GenerateJWT(inUserLogin.Username, getMessage);
-            return Ok(new { result = getResult, message = getJWTToken });
+            if (inUserLogin == null) return Ok(new { result = 0, message = "No user login" });
+            if (this.WebService == null) return Ok(new { result = 0, message = "No web appliction service" });
+            // Fix CS8602: Check for nulls before dereferencing
+            var prcAdmin = this.WebService.DatabaseService?.PSQL?.PrcAdmin;
+            JObject getData = prcAdmin != null
+                ? await prcAdmin.Execute(1001, new JObject()
+                {
+                    { "username", this.WebService.EncryptionService.GetValue(inUserLogin.Username, this.logger) },
+                    { "password", this.WebService.EncryptionService.GetValue(inUserLogin.Password, this.logger) }
+                })
+                : new JObject();
+
+            // IDE0028: Use collection initializer for JObject
+            int result = int.TryParse((getData["result"] ?? "").ToObject<string>() ?? "", out result) ? result : 0;
+            string message = (getData["message"] ?? "").ToObject<string>() ?? "";
+            var JWTService = this.WebService.JWTService;
+            if (JWTService == null) return Ok(new { result = 0, message = "No JWT service" });
+            if (result == 1) message = JWTService.GetToken(inUserLogin.Username, message, logger);
+            return Ok(new { result, message });
         }
 
 
 
 
+
+
         /** getting postgresql server version */
+        //[Authorize(Roles = "admin")]
         [Authorize(Roles = "admin")]
         [HttpGet]
         [Route("postgresql/server-version")]
         public async Task<IActionResult> GetPSQL_SERVER_VERSION()
         {
-            int inMode = new Models.Modeling.Database.PSQL.MAIN.PRC.INIT.GETTING().SERVER_VERSION;
-            logger.LogInformation($"{Request.HttpContext.Connection.RemoteIpAddress?.ToString()}: Admin mode(get database version PSQLMain)");
-            JObject getData = await new Models.Database.POSTGRESQL().Prc_Admin(logger, inMode);
-            int getResult = int.TryParse((getData["result"] ?? "").ToObject<string>() ?? "", out getResult) ? getResult : 0;
-            return Ok(new { result = getResult, message = (getData["message"] ?? "").ToObject<string>() ?? "" });
+            if (this.WebService == null) return Ok(new { result = 0, message = "No web appliction service" });
+            // Fix CS8602: Check for nulls before dereferencing
+            var prcAdmin = this.WebService.DatabaseService?.PSQL?.PrcAdmin;
+            if (prcAdmin == null) return Ok(new { result = 0, message = "No database service" });
+            JObject getData = await prcAdmin.Execute(1000);
+
+            // IDE0028: Use collection initializer for JObject
+            int result = int.TryParse((getData["result"] ?? "").ToObject<string>() ?? "", out result) ? result : 0;
+            string message = (getData["message"] ?? "").ToObject<string>() ?? "";
+            return Ok(new { result, message });
         }
     }
 }

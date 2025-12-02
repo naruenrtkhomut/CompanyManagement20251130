@@ -8,5 +8,6 @@
     <Build />
     <Deploy />
   </Project>
+  <Project Path="../DatabaseMocking/DatabaseMocking.csproj" Id="fb4cba0a-c937-451c-bf49-46a5b4156656" />
   <Project Path="api.csproj" />
 </Solution>

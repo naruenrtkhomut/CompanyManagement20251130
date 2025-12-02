@@ -22,9 +22,7 @@
                             public struct GETTING
                             {
                                 public readonly int SERVER_VERSION = 1000;
-                                public readonly int SHARDING_DATABASE = 1001;
-                                public readonly int LOGIN = 1002;
-                                public readonly int ADMIN_LOGIN = 1003;
+                                public readonly int ADMIN_LOGIN = 1001;
 
                                 public GETTING() { }
                             }

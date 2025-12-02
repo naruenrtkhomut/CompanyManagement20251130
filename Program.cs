@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace api
@@ -9,18 +10,22 @@ namespace api
     public class Program
     {
         // depedance configuration
-        public static Models.Configuration? configuration { get; set; }
+        //public static Models.ConfigurationOld? configuration { get; set; }
+        public static Models.Configuration.Main? Service { get; set; }
 
         public static async Task Main(string[] args)
         {
             WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-            configuration = new Models.Configuration(builder);
+            //configuration = new Models.ConfigurationOld(builder);
+            Service = new Models.Configuration.Main(builder);
 
             // Add services to the container.
             builder.Services.AddControllers();
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
 
+
+            AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
             WebApplication app = builder.Build();
 
@@ -38,12 +43,15 @@ namespace api
             app.UseRateLimiter();
 
 
-            app.MapControllers().RequireRateLimiting("FastPolicy");
-            configuration.Cors.ForEach(getCor =>
+            app.MapControllers();
+            Service.CorService.CorList.ForEach(getCor =>
             {
-                app.UseCors(getCor.Name);
-                Console.WriteLine($"Add cor name: {getCor.Name}");
-                Console.WriteLine($"Add cor link: {getCor.Link}");
+                if (!string.IsNullOrEmpty(getCor.Name) && !string.IsNullOrEmpty(getCor.Link))
+                {
+                    app.UseCors(getCor.Name);
+                    Console.WriteLine($"Add cor name: {getCor.Name}");
+                    Console.WriteLine($"Add cor link: {getCor.Link}");
+                }
             });
 
 
